@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <title>Tiny ToDo Manager</title>
+        <link rel="icon" href="<%= BASE_URL %>favicon.ico">
+        <link href="<%= BASE_URL %>static/style.css" rel="stylesheet" />
+    </head>
+
+    <body>
+        <div id="nescss">
+            <header :class="{ sticky: scrollPos > 50 }">
+                <div class="container">
+                    <div class="nav-brand">
+                        <a href="<%= BASE_URL %>">
+                            <h1><i class="snes-jp-logo brand-logo"></i>TinyToDo</h1>
+                        </a>
+                        <p>Tiny TODO Manager.</p>
+                    </div>
+
+                    <div class="social-buttons">
+                        <div class="share">
+                            <a href="https://twitter.com/kelebeks" target="_blank"><i class="nes-icon twitter"></i></a>
+                            <a href="https://github.com/askin" target="_blank"><i class="nes-icon github"></i></a>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <div class="container">
+                
+                <main id="app" class="main-content"></main>
+                <!-- built files will be auto injected -->
+            </div>
+        </div>
+    </body>
+</html>

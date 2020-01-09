@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+python-multipart
+pymongo
+pyjwt
+passlib[bcrypt]
+motor
+aiofiles
