@@ -194,7 +194,7 @@ async def get_todo(uuid: str, current_user: User = Depends(get_current_active_us
     return TodoInDB(**cursor)
 
 @app.delete("/todos/{uuid}")
-async def get_todo(uuid: str, current_user: User = Depends(get_current_active_user)):
+async def get_delete(uuid: str, current_user: User = Depends(get_current_active_user)):
     """Delete todo item with uuid"""
 
     cursor = await db.todos.delete_one({'username': current_user.username, 'uuid': uuid})
@@ -206,7 +206,6 @@ async def patch_todo(uuid: str, todo_patch: TodoPatch, current_user: User = Depe
     """Patch todo item"""
 
     cursor = await db.todos.find_one({'username': current_user.username, 'uuid': uuid})
-    todo_in_db = TodoInDB(**cursor)
 
     todo_patch_dict = todo_patch.dict()
     update_query = {}
@@ -215,7 +214,7 @@ async def patch_todo(uuid: str, todo_patch: TodoPatch, current_user: User = Depe
             update_query[key] = todo_patch_dict[key]
 
     # FIXME: Return proper result
-    item = await TodoInDB.update(db, update_query, uuid)
+    await TodoInDB.update(db, update_query, uuid)
     cursor = await db.todos.find_one({'username': current_user.username, 'uuid': uuid})
     return TodoInDB(**cursor)
 
