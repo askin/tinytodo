@@ -223,8 +223,11 @@ async def get_all_todos(current_user: User = Depends(get_current_active_user)):
 async def get_todo(uuid: str, current_user: User = Depends(get_current_active_user)):
     """Get todo item with uuid"""
 
-    cursor = await db.todos.find_one({'username': current_user.username, 'uuid': uuid})
-    return TodoInDB(**cursor)
+    item = await db.todos.find_one({'username': current_user.username, 'uuid': uuid})
+    if item is None:
+        raise HTTPException(status_code=404, detail="Todo item is not found!")
+
+    return TodoInDB(**item)
 
 @app.delete("/todos/{uuid}")
 async def get_delete(uuid: str, current_user: User = Depends(get_current_active_user)):
