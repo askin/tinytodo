@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import uuid as gen_uuid
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from starlette.status import HTTP_401_UNAUTHORIZED
 
 from starlette.middleware.cors import CORSMiddleware
@@ -56,6 +56,13 @@ class User(BaseModel):
     email: str = None
     full_name: str = None
     disabled: bool = None
+
+class DummyUser(BaseModel):
+    username: str
+    email: EmailStr
+    full_name: str
+    disabled: bool = False
+    password: str
 
 
 class UserInDB(User):
@@ -163,6 +170,32 @@ class TodoInDB(Todo):
     @staticmethod
     async def update(db, data, uuid):
         return await db.todos.update_one({'uuid': uuid}, {"$set": data})
+
+@app.post("/users")
+async def create_user(dummy_user: DummyUser):
+    """Create new user"""
+
+    # FIXME: check email already exists
+    item = await db.users.find_one({'username': dummy_user.username})
+    if item is not None:
+        raise HTTPException(status_code=409, detail="User allready exists")
+
+    new_user = User(
+        username = dummy_user.username,
+        email = dummy_user.email,
+        full_name = dummy_user.full_name,
+    )
+
+    hashed_password = bcrypt.hashpw(dummy_user.password.encode(), bcrypt.gensalt())
+
+    new_user_in_db = UserInDB(
+        **new_user.dict(),
+        hashed_password = hashed_password
+    )
+
+    await db.users.insert_one(new_user_in_db.dict())
+    return new_user
+
 
 @app.post("/todos")
 async def create_todo(todo_item: Todo, current_user: User = Depends(get_current_active_user)):
