@@ -134,3 +134,25 @@ def test_add_new_todo():
                           headers=headers)
 
     assert response.status_code == 404
+
+def test_patchWithNotValidUUID():
+
+    # Authenticate
+    response = client.post("/token",
+                           data={
+                               'username': 'askinozgur',
+                               'password': 'secret pass'
+                           })
+
+    assert response.status_code == 200
+    json_response = response.json()
+
+    headers = {'Authorization': 'Bearer ' + json_response["access_token"]}
+
+    # Check patch item
+    uuid = "notvaliduuid"
+    response = client.patch("/todos/{}".format(uuid),
+                            headers=headers,
+                            json={'title': 'Test Patch Item 1'})
+
+    assert response.status_code == 404

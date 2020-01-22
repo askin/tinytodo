@@ -297,6 +297,10 @@ async def patch_todo(uuid: str, todo_patch: TodoPatch, current_user: User = Depe
 
     cursor = await DB_ENGINE.find_one('todos', {'username': current_user.username, 'uuid': uuid})
 
+    if cursor is None:
+        raise HTTPException(status_code=404, detail="Todo item is not found!")
+
+
     todo_patch_dict = todo_patch.dict()
     update_query = {}
     for key in todo_patch_dict:
