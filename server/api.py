@@ -18,9 +18,6 @@ SECRET_KEY = "A RANDOM, LONG, SEQUENCE OF CHARACTERS THAT ONLY THE SERVER KNOWS"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 1440
 
-# There are better ways, get it and implement it
-db = motor_asyncio.AsyncIOMotorClient('mongodb://localhost')['tinytodo']
-
 app = FastAPI()
 
 origins = [
@@ -36,6 +33,63 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+import abc
+
+class DBWrapper(abc.ABC):
+    @abc.abstractmethod
+    async def insert_one(self, table_name: str, item_dict: dict):
+        pass
+
+    @abc.abstractmethod
+    async def find_one(self, table_name: str, search_params: dict):
+        pass
+
+    @abc.abstractmethod
+    async def update_one(self, table_name: str, search_params: dict, data: dict):
+        pass
+
+    @abc.abstractmethod
+    async def find(self, table_name: str, search_params: dict):
+        pass
+
+    @abc.abstractmethod
+    async def delete_one(self, table_name: str, search_params: dict):
+        pass
+
+class MongoDBWrapper(DBWrapper):
+    def __init__(self, connection_str: str, database: str):
+        self.db = motor_asyncio.AsyncIOMotorClient(connection_str)[database]
+
+    async def insert_one(self, table_name: str, item_dict: dict):
+        collection = self.db.get_collection(table_name)
+        await collection.insert_one(item_dict)
+
+    async def find_one(self, table_name: str, search_params: dict):
+        collection = self.db.get_collection(table_name)
+        item = await collection.find_one(search_params)
+        return item
+
+    async def update_one(self, table_name: str, search_params: dict, data: dict):
+        collection = self.db.get_collection(table_name)
+        rt = await collection.update_one(search_params, {"$set": data})
+        return rt
+
+    async def delete_one(self, table_name: str, search_params: dict):
+        collection = self.db.get_collection(table_name)
+        return await collection.delete_one(search_params)
+
+    async def find(self, table_name: str, search_params: dict):
+        collection = self.db.get_collection(table_name)
+        cursor = collection.find(search_params)
+        rt = []
+        for row in await cursor.to_list(length=100):
+            rt.append(row)
+
+        return rt
+
+DB_ENGINE = MongoDBWrapper('mongodb://localhost', 'tinytodo')
+
 
 def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode = data.copy()
@@ -84,7 +138,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     except PyJWTError:
         raise credentials_exception
 
-    user_dict = await db.users.find_one({'username': username})
+    user_dict = await DB_ENGINE.find_one('users', {'username': username})
 
     if not user_dict:
         raise credentials_exception
@@ -106,7 +160,7 @@ async def get_current_active_user(current_user: User = Depends(get_current_user)
 
 @app.post("/token")
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    user_dict = await db.users.find_one({'username': form_data.username})
+    user_dict = await DB_ENGINE.find_one('users', {'username': form_data.username})
 
     if not user_dict:
         raise HTTPException(
@@ -155,7 +209,7 @@ class TodoInDB(Todo):
 
     @staticmethod
     async def get_by_uuid(db, uuid):
-        item = await db.todos.find_one({'uuid': uuid})
+        item = await db.find_one('users', {'uuid': uuid})
         return item
 
     @staticmethod
@@ -164,19 +218,19 @@ class TodoInDB(Todo):
         uid = gen_uuid.uuid1()
         item = TodoInDB(**data)
         item.uuid = uid.hex
-        db.todos.insert_one(item.dict())
+        await db.insert_one('todos', item.dict())
         return item
 
     @staticmethod
     async def update(db, data, uuid):
-        return await db.todos.update_one({'uuid': uuid}, {"$set": data})
+        return await db.update_one('todos', {'uuid': uuid}, data)
 
 @app.post("/users")
 async def create_user(dummy_user: DummyUser):
     """Create new user"""
 
     # FIXME: check email already exists
-    item = await db.users.find_one({'username': dummy_user.username})
+    item = await DB_ENGINE.find_one('users', {'username': dummy_user.username})
     if item is not None:
         raise HTTPException(status_code=409, detail="User allready exists")
 
@@ -193,7 +247,7 @@ async def create_user(dummy_user: DummyUser):
         hashed_password = hashed_password
     )
 
-    await db.users.insert_one(new_user_in_db.dict())
+    await DB_ENGINE.insert_one('users', new_user_in_db.dict())
     return new_user
 
 
@@ -207,15 +261,15 @@ async def create_todo(todo_item: Todo, current_user: User = Depends(get_current_
         username=current_user.username
     )
 
-    return await TodoInDB.create(db, item.dict())
+    return await TodoInDB.create(DB_ENGINE, item.dict())
 
 @app.get("/todos")
 async def get_all_todos(current_user: User = Depends(get_current_active_user)):
     """Get all todo items"""
 
-    cursor = db.todos.find({'username': current_user.username})
+    cursor = await DB_ENGINE.find('todos', {'username': current_user.username})
     rt = []
-    for row in await cursor.to_list(length=100):
+    for row in cursor:
         rt.append(TodoInDB(**row))
     return rt
 
@@ -223,7 +277,7 @@ async def get_all_todos(current_user: User = Depends(get_current_active_user)):
 async def get_todo(uuid: str, current_user: User = Depends(get_current_active_user)):
     """Get todo item with uuid"""
 
-    item = await db.todos.find_one({'username': current_user.username, 'uuid': uuid})
+    item = await DB_ENGINE.find_one('todos', {'username': current_user.username, 'uuid': uuid})
     if item is None:
         raise HTTPException(status_code=404, detail="Todo item is not found!")
 
@@ -233,7 +287,7 @@ async def get_todo(uuid: str, current_user: User = Depends(get_current_active_us
 async def get_delete(uuid: str, current_user: User = Depends(get_current_active_user)):
     """Delete todo item with uuid"""
 
-    cursor = await db.todos.delete_one({'username': current_user.username, 'uuid': uuid})
+    cursor = await DB_ENGINE.delete_one('todos', {'username': current_user.username, 'uuid': uuid})
     print({'username': current_user.username, 'uuid': uuid})
     return {'status': 'ok', 'count': cursor.deleted_count}
 
@@ -241,7 +295,7 @@ async def get_delete(uuid: str, current_user: User = Depends(get_current_active_
 async def patch_todo(uuid: str, todo_patch: TodoPatch, current_user: User = Depends(get_current_active_user)):
     """Patch todo item"""
 
-    cursor = await db.todos.find_one({'username': current_user.username, 'uuid': uuid})
+    cursor = await DB_ENGINE.find_one('todos', {'username': current_user.username, 'uuid': uuid})
 
     todo_patch_dict = todo_patch.dict()
     update_query = {}
@@ -250,7 +304,6 @@ async def patch_todo(uuid: str, todo_patch: TodoPatch, current_user: User = Depe
             update_query[key] = todo_patch_dict[key]
 
     # FIXME: Return proper result
-    await TodoInDB.update(db, update_query, uuid)
-    cursor = await db.todos.find_one({'username': current_user.username, 'uuid': uuid})
+    await TodoInDB.update(DB_ENGINE, update_query, uuid)
+    cursor = await DB_ENGINE.find_one('todos', {'username': current_user.username, 'uuid': uuid})
     return TodoInDB(**cursor)
-

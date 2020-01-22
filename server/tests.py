@@ -1,5 +1,5 @@
 from starlette.testclient import TestClient
-from api import app
+from api import app, MongoDBWrapper
 import api
 
 from motor import motor_asyncio
@@ -12,7 +12,7 @@ formated_date = now.strftime("%Y%m%d_%H%M%S")
 db_name = f"testtinytodo_{formated_date}".format()
 
 client = TestClient(app)
-api.db = motor_asyncio.AsyncIOMotorClient('mongodb://localhost')[db_name]
+api.DB_ENGINE = MongoDBWrapper('mongodb://localhost', db_name)
 
 def test_get_items_without_token():
     response = client.get("/todos")
@@ -36,7 +36,7 @@ def test_login():
     print(response.json())
 
     assert response.status_code == 200
-    
+
     response = client.post("/token",
                            data={
                                'username': 'askinozgur',
@@ -56,11 +56,11 @@ def test_get_items_with_token():
 
     assert response.status_code == 200
     json_response = response.json()
-    
+
     response = client.get("/todos", headers={'Authorization': 'Bearer ' + json_response["access_token"]})
     assert response.status_code == 200
 
-    
+
 def test_add_new_todo():
 
     # Authenticate
@@ -120,17 +120,17 @@ def test_add_new_todo():
 
     response = client.get("/todos/{}".format(uuid),
                           headers=headers)
-    
+
     assert response.status_code == 200
     assert response.json()['title'] == 'Test Patch Item 1'
 
     # Check delete item
     response = client.delete("/todos/{}".format(uuid),
                             headers=headers)
-    
+
     assert response.status_code == 200
 
     response = client.get("/todos/{}".format(uuid),
                           headers=headers)
-    
+
     assert response.status_code == 404
