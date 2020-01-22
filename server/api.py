@@ -8,11 +8,11 @@ from starlette.status import HTTP_401_UNAUTHORIZED
 
 from starlette.middleware.cors import CORSMiddleware
 
-from motor import motor_asyncio
-
 import bcrypt
 import jwt
 from jwt import PyJWTError
+
+from db.mongowrapper import MongoDBWrapper
 
 SECRET_KEY = "A RANDOM, LONG, SEQUENCE OF CHARACTERS THAT ONLY THE SERVER KNOWS"
 ALGORITHM = "HS256"
@@ -34,59 +34,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-import abc
-
-class DBWrapper(abc.ABC):
-    @abc.abstractmethod
-    async def insert_one(self, table_name: str, item_dict: dict):
-        pass
-
-    @abc.abstractmethod
-    async def find_one(self, table_name: str, search_params: dict):
-        pass
-
-    @abc.abstractmethod
-    async def update_one(self, table_name: str, search_params: dict, data: dict):
-        pass
-
-    @abc.abstractmethod
-    async def find(self, table_name: str, search_params: dict):
-        pass
-
-    @abc.abstractmethod
-    async def delete_one(self, table_name: str, search_params: dict):
-        pass
-
-class MongoDBWrapper(DBWrapper):
-    def __init__(self, connection_str: str, database: str):
-        self.db = motor_asyncio.AsyncIOMotorClient(connection_str)[database]
-
-    async def insert_one(self, table_name: str, item_dict: dict):
-        collection = self.db.get_collection(table_name)
-        await collection.insert_one(item_dict)
-
-    async def find_one(self, table_name: str, search_params: dict):
-        collection = self.db.get_collection(table_name)
-        item = await collection.find_one(search_params)
-        return item
-
-    async def update_one(self, table_name: str, search_params: dict, data: dict):
-        collection = self.db.get_collection(table_name)
-        rt = await collection.update_one(search_params, {"$set": data})
-        return rt
-
-    async def delete_one(self, table_name: str, search_params: dict):
-        collection = self.db.get_collection(table_name)
-        return await collection.delete_one(search_params)
-
-    async def find(self, table_name: str, search_params: dict):
-        collection = self.db.get_collection(table_name)
-        cursor = collection.find(search_params)
-        rt = []
-        for row in await cursor.to_list(length=100):
-            rt.append(row)
-
-        return rt
 
 DB_ENGINE = MongoDBWrapper('mongodb://localhost', 'tinytodo')
 

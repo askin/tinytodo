@@ -1,10 +1,12 @@
 from starlette.testclient import TestClient
-from api import app, MongoDBWrapper
+from api import app
 import api
 
 from motor import motor_asyncio
 
 from datetime import datetime
+
+from db.mongowrapper import MongoDBWrapper
 
 now = datetime.now()
 formated_date = now.strftime("%Y%m%d_%H%M%S")
